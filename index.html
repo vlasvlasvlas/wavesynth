@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WaveSynth</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #020b14; overflow: hidden; width: 100vw; height: 100vh; }
+    #ocean { display: block; width: 100%; height: 100%; }
+    #hud {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      color: #00f5d4;
+      background: rgba(2, 11, 20, 0.7);
+      padding: 12px;
+      border: 1px solid #00f5d422;
+      pointer-events: none;
+      white-space: pre;
+      line-height: 1.6;
+    }
+    #start {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: transparent;
+      border: 1px solid #00f5d4;
+      color: #00f5d4;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      padding: 12px 32px;
+      cursor: pointer;
+      letter-spacing: 2px;
+    }
+    #start:hover { background: #00f5d411; }
+  </style>
+</head>
+<body>
+  <canvas id="ocean"></canvas>
+  <div id="hud"></div>
+  <button id="start">ENTER THE OCEAN</button>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
