@@ -15,19 +15,23 @@ export function buildOceanFallback(lat: number, lon: number): OceanState {
 
 export async function fetchOceanState(lat: number, lon: number): Promise<OceanState> {
   try {
-    const url = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&current=wave_height,wave_period,wave_direction,wind_wave_height,wind_wave_period`
-    const res = await fetch(url)
-    if (!res.ok) return buildOceanFallback(lat, lon)
-    const json = await res.json()
-    const c = json.current ?? {}
+    // Marine API: olas y swell. Wind speed requiere el endpoint de forecast por separado.
+    const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&current=wave_height,wave_period,wave_direction`
+    const windUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=wind_speed_10m,temperature_2m`
+
+    const [marineRes, windRes] = await Promise.all([fetch(marineUrl), fetch(windUrl)])
+
+    const marine = marineRes.ok ? (await marineRes.json()).current ?? {} : {}
+    const weather = windRes.ok ? (await windRes.json()).current ?? {} : {}
+
     return {
       lat,
       lon,
-      waveHeightM: c.wave_height ?? null,
-      peakPeriodS: c.wave_period ?? null,
-      waveDirectionDeg: c.wave_direction ?? null,
-      windSpeedMS: c.wind_wave_height ?? null,
-      waterTempC: null,
+      waveHeightM: marine.wave_height ?? null,
+      peakPeriodS: marine.wave_period ?? null,
+      waveDirectionDeg: marine.wave_direction ?? null,
+      windSpeedMS: weather.wind_speed_10m ?? null,
+      waterTempC: weather.temperature_2m ?? null,
       fetchedAt: Date.now(),
     }
   } catch {
