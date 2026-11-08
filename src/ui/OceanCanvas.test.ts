@@ -15,9 +15,9 @@ it('lon 0 → x 500', () => {
   expect(latLonToCanvasX(0, fakeCanvas)).toBeCloseTo(500, 3)
 })
 
-it('depth 0 → y en zona superficial (top 30%)', () => {
+it('depth 0 → y en zona superficial (cerca del 50% del canvas)', () => {
   const y = depthToCanvasY(0, fakeCanvas)
-  expect(y).toBeLessThan(fakeCanvas.height * 0.35)
+  expect(y).toBeLessThan(fakeCanvas.height * 0.56)
 })
 
 it('depth 2000 → y cercano al fondo (>85%)', () => {

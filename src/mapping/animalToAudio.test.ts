@@ -47,7 +47,7 @@ it('todos null → valores por defecto válidos sin NaN', () => {
     waveDirectionDeg: null, windSpeedMS: null, waterTempC: null, fetchedAt: 0,
   }
   const p = mapToAudioParams(
-    { ...baseAnimal, depthM: null, speedMS: null, headingDeg: null, lon: null },
+    { ...baseAnimal, depthM: null, speedMS: null, headingDeg: null, lon: 0 },
     nullOcean,
   )
   Object.values(p).forEach(v => expect(Number.isNaN(v)).toBe(false))

@@ -47,9 +47,16 @@ export interface AudioParams {
   depthDelayMs: number
   filterCutoffNorm: number
   panNorm: number
-  // Nuevos moduladores gestuales de surf
-  harmonicFold?: number  // Distorsión / wavefolding al cortar la cresta
-  resonanceQ?: number    // Resonancia de tubo (barrel)
+  harmonicFold?: number
+  resonanceQ?: number
+  waveType?: number  // 0=sine 1=square 2=saw 3=triangle
+  // Voice B — ballena (sub-grave, eco profundo)
+  whaleFreq?: number
+  whaleAmp?: number
+  whalePanNorm?: number
+  whaleDepthMix?: number
+  whaleFeedback?: number
+  whaleDelayMs?: number
 }
 
 export interface MarineSpot {

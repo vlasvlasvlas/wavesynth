@@ -4,74 +4,54 @@ Todas las modificaciones notables realizadas para reconectar la implementación 
 
 ---
 
+## [0.3.1] — 2026-11-08
+
+### 🎚️ 1. Control Vertical Completo: Arriba = Agudo / Abajo = Grave
+- **`src/main.ts`:**
+  - **Mouse / Touch:** Se habilitó el control en el eje `clientY`. Al arrastrar hacia arriba en la pantalla, la frecuencia sube continuamente hacia agudos brillantes; al arrastrar hacia abajo, la frecuencia desciende a sub-graves profundos.
+  - **Teclado:** Las flechas `ArrowUp` y `ArrowDown` suben y bajan la frecuencia del oscilador con una curva exponencial suave.
+  - **`src/ui/TelemetryHUD.ts`:** Muestra la frecuencia en tiempo real (en Hz o kHz), el multiplicador activo y la nota musical más cercana (ej. `440 Hz (La4)`).
+
+---
+
+### 🌊 2. La Forma de Onda se Achica y Agranda según la Frecuencia ($\lambda \propto 1/f$)
+- **`src/ui/OceanCanvas.ts`:**
+  - La cantidad de ciclos visibles a lo largo de la pantalla ahora responde dinámicamente a la frecuencia acústica activa:
+    - **Frecuencia baja (30–60 Hz):** La forma de onda **se agranda**, mostrando apenas 1 o 2 olas colosales y espaciadas.
+    - **Frecuencia media (110–440 Hz):** Muestra entre 4 y 8 crestas armónicas.
+    - **Frecuencia alta (>1000 Hz):** La forma de onda **se achica**, comprimiéndose en decenas de crestas apretadas y vibrantes.
+  - Sincronización de fase y propagación fluida para que la onda viaje sin saltos ni parpadeos.
+
+---
+
+### ⛵ 3. Física Náutica Real del Barco (Flotabilidad en Proa y Popa)
+- **`src/ui/OceanCanvas.ts`:**
+  - El barco ya no es un punto estático que flota en una sola coordenada: **se apoya físicamente en dos puntos sobre la superficie del agua** (proa y popa con una eslora de 44 px).
+  - Cálculo del cabeceo náutico (*pitch*): $\text{inclinación} = \arctan\left(\frac{y_{\text{proa}} - y_{\text{popa}}}{\text{eslora}}\right)$. El barco se inclina suavemente al subir la pared de la ola y se lanza en picada al bajar.
+  - Sistema de amortiguación con inercia según la forma de onda (Sine, Square, Saw, Triangle).
+  - **Diseño del Barco:** Casco hidrodinámico azul marino con línea de flotación ámbar, luz de proa turquesa, mástil vertical y vela triangular que flamea con el viento.
+
+---
+
+### 🌀 4. LFO Marino Visible y Audible
+- **`src/ui/OceanCanvas.ts` & `src/main.ts`:**
+  - El LFO oceánico (derivado del período marino $T_p$) modula la marea general y el oleaje macroscópico, haciendo que el mar respire y suba/baje en ciclos lentos.
+  - Modulación sutil y orgánica del filtro de corte para generar respiración sonora acústica.
+  - El HUD incluye un gráfico en movimiento de la fase y tasa del LFO.
+
+---
+
 ## [0.2.0] — 2026-11-08
 
-### 🌊 1. Conexión Real DSP ↔ Superficie del Mar (La Forma de Onda ES la Ola)
-- **`src/audio/AudioEngine.ts`:**
-  - Se integró un `AnalyserNode` estéreo en la cadena de audio (`node → gain → analyser → destination`).
-  - Se añadió el método `getWaveformData(output?: Float32Array)` para leer en tiempo real las muestras del oscilador en el dominio del tiempo (`getFloatTimeDomainData`).
-  - Se implementó un algoritmo de **Wavefolding no lineal** (`harmonicFold`) en el `AudioWorklet` para plegado y distorsión de armónicos cuando el surfista ataca la cresta.
-  - Se agregó control dinámico de resonancia $Q$ (`resonanceQ`) en el filtro biquad para simular la acústica hueca del tubo marino.
-- **`src/ui/OceanCanvas.ts`:**
-  - **Eliminadas** las funciones trigonométricas estáticas decorativas que no tenían relación con el sonido.
-  - La línea del agua ahora se calcula recorriendo directamente las muestras del buffer de audio acústico en vivo, escaladas por la altura de ola ($H_s$) y el período ($T_p$) de la telemetría marina.
-  - Se agregaron efectos de rayos cáusticos submarinos y espuma bioluminiscente en las crestas donde rompe la onda.
+### 🌊 1. Conexión Real DSP ↔ Superficie del Mar
+- Integración de `AnalyserNode` en `AudioEngine.ts` para extraer muestras de audio vivas (`Float32Array`).
+- Eliminadas las ondas decorativas desconectadas del sintetizador.
+- Implementación de `harmonicFold` (wavefolder) en el `AudioWorklet`.
 
----
-
-### 🏄‍♂️ 2. El Animal / Surfista Montado sobre la Sinewave
-- **Reubicación física:**
-  - El animal dejó de ser un punto perdido a 2.000 metros de profundidad en un fondo negro; ahora **está montado directamente sobre la cresta de la forma de onda de audio** ($Y = waveY(X)$).
-- **Física de navegación:**
-  - Cálculo de la tangente local de la onda ($\theta = \arctan(dy/dx)$): el surfista rota e inclina su ángulo dinámicamente con la subida y bajada de la ola.
-  - Generador de partículas de agua y spray marino (*wake spray*) expulsado detrás de la tabla.
-- **Detección de Zonas de Surf y Modulación Gestual:**
-  - `lip` (Cresta / Labio): Al subir a la parte más alta, se activa distorsión por *wavefolding* y chisporroteo de spray.
-  - `barrel` (El Tubo): En las paredes empinadas y cóncavas, aumenta la resonancia $Q$ y el retardo hueco.
-  - `face` (La Pared): Sinusoide pura y modulación armónica limpia.
-  - `trough` (El Valle): Énfasis en osciladores subgraves y filtrado cálido.
-
----
+### 🏄‍♂️ 2. Navegación sobre la Forma de Onda
+- Posicionamiento del interactor sobre la superficie de la sinewave.
+- Detección de zonas: `lip` (cresta), `barrel` (tubo), `face` (pared), `trough` (valle).
 
 ### 🌍 3. Spots Oceánicos y Generador de Mar Aleatorio
-- **`src/data/marineSpots.ts` (Nuevo Módulo):**
-  - Lista de spots legendarios con coordenadas reales y descripciones tímbricas:
-    - 🌊 **Nazaré (Portugal):** Olas colosales de más de 12 m, tormenta atlántica masiva.
-    - 🌺 **Banzai Pipeline (Hawái):** Swell armónico del Pacífico, tubo y sinusoide cristalina.
-    - 🏝️ **Teahupo'o (Tahití):** Ola cavernosa sobre arrecife somero con resonancia extrema.
-    - 🇦🇷 **Mar del Plata (Argentina):** Marejadas del sur y viento pampero crocante.
-    - 🧭 **Point Nemo:** El polo de inaccesibilidad en el Pacífico Sur, calma abisal y pulsaciones profundas.
-    - 🇿🇦 **Jeffreys Bay (Sudáfrica):** Paredes kilométricas de alta velocidad.
-  - Función `getRandomOceanSpot()` con máscara de exclusión de bloques continentales (`isOceanCoordinate`), garantizando que cualquier punto aleatorio caiga **estrictamente en aguas marinas abiertas**.
-- **`src/ui/MiniMap.ts`:**
-  - El minimapa mundial ahora es interactivo: al hacer clic en cualquier océano del mapa se teletransportan las coordenadas y se consultan los datos marinos de ese punto en tiempo real.
-
----
-
-### 🎛️ 4. HUD Explicativo y Panel de Control
-- **`src/ui/TelemetryHUD.ts`:**
-  - Rediseñado para explicar en lenguaje claro cómo cada variable meteorológica impacta en la onda y en el sonido:
-    - *Altura de ola ($H_s$) $\rightarrow$ Amplitud y ganancia del oscilador.*
-    - *Período ($T_p$) $\rightarrow$ Frecuencia fundamental y sub-bass.*
-    - *Viento $\rightarrow$ Modulación FM (arruga la forma de onda visiblemente).*
-    - *Temperatura $\rightarrow$ Brillo y corte de filtro.*
-    - *Zona de surf $\rightarrow$ Efecto tímbrico activo en ese instante.*
-- **`src/main.ts` & `index.html`:**
-  - Panel inferior flotante con:
-    - Dropdown estilizado de spots famosos.
-    - Botón `🎲 MAR ALEATORIO` de acceso rápido.
-    - Sliders de Volumen, Brillo del Filtro y Viento FM.
-    - Conmutador `🏄‍♂️ AUTO / MANUAL`.
-  - Nueva pantalla de inicio explicativa y controles intuitivos vía mouse (drag horizontal) y teclado (`← →`).
-
----
-
-### 🧪 5. Verificación y Tests
-- Mantenimiento del 100% de la suite de pruebas unitarias (`npm test`):
-  - `src/audio/AudioEngine.test.ts` (3/3 pass)
-  - `src/ui/OceanCanvas.test.ts` (6/6 pass)
-  - `src/mapping/animalToAudio.test.ts` (8/8 pass)
-  - `src/mapping/slewLimiter.test.ts` (3/3 pass)
-  - `src/data/marineApi.test.ts` (1/1 pass)
-  - `src/TrackPlayer.test.ts` (3/3 pass)
-- Build de producción con Vite (`npm run build`) verificado con éxito sin advertencias ni errores de tipos.
+- Módulo `src/data/marineSpots.ts` con spots legendarios y algoritmo de coordenadas con máscara continental.
+- Minimapa interactivo con teletransporte.
