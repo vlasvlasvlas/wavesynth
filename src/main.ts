@@ -2,8 +2,9 @@ import { loadTrack } from './data/TrackLoader'
 import { fetchOceanState, buildOceanFallback } from './data/marineApi'
 import { mapToAudioParams } from './mapping/animalToAudio'
 import { AudioEngine } from './audio/AudioEngine'
-import { OceanCanvas, depthToCanvasY } from './ui/OceanCanvas'
+import { OceanCanvas } from './ui/OceanCanvas'
 import { TelemetryHUD } from './ui/TelemetryHUD'
+import { MiniMap } from './ui/MiniMap'
 import { TrackPlayer } from './TrackPlayer'
 import type { OceanState, AnimalState, AudioParams } from './types'
 
@@ -15,12 +16,15 @@ const track = loadTrack()
 const player = new TrackPlayer(track, PLAYBACK_RATE)
 const engine = new AudioEngine()
 
-const canvasEl = document.getElementById('ocean') as HTMLCanvasElement
-const hudEl    = document.getElementById('hud') as HTMLDivElement
-const startBtn = document.getElementById('start') as HTMLButtonElement
+const canvasEl    = document.getElementById('ocean') as HTMLCanvasElement
+const hudEl       = document.getElementById('hud') as HTMLDivElement
+const startBtn    = document.getElementById('start') as HTMLButtonElement
+const startScreen = document.getElementById('start-screen') as HTMLDivElement
+const hintEl      = document.getElementById('hint') as HTMLDivElement
 
 const oceanCanvas = new OceanCanvas(canvasEl)
 const hud = new TelemetryHUD(hudEl)
+const minimap = new MiniMap()
 
 let lastOcean: OceanState = buildOceanFallback(track.points[0].lat, track.points[0].lon)
 let lastFetchLat = track.points[0].lat
@@ -187,13 +191,16 @@ function loop(t: number): void {
   engine.updateParams(applyFX(rawParams))
   oceanCanvas.render(renderAnimal, lastOcean, t)
   hud.update(renderAnimal, lastOcean)
+  minimap.update(renderAnimal.lat, renderAnimal.lon)
 
   requestAnimationFrame(loop)
 }
 
 startBtn.addEventListener('click', async () => {
   await engine.start()
-  startBtn.style.display = 'none'
+  startScreen.style.display = 'none'
+  hintEl.style.display = 'block'
+  setTimeout(() => { hintEl.style.display = 'none' }, 4000)
   buildControls()
   requestAnimationFrame(loop)
 })

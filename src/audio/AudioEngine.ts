@@ -147,7 +147,7 @@ export class AudioEngine {
       URL.revokeObjectURL(blobUrl)
     }
 
-    this.node = new AudioWorkletNode(this.ctx, 'ocean-synth')
+    this.node = new AudioWorkletNode(this.ctx, 'ocean-synth', { outputChannelCount: [2] })
     this.gain = this.ctx.createGain()
     this.gain.gain.value = 0.8
     this.node.connect(this.gain)

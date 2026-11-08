@@ -7,42 +7,66 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #020b14; overflow: hidden; width: 100vw; height: 100vh; }
-    #ocean { display: block; width: 100%; height: 100%; }
+    #ocean { display: block; width: 100%; height: 100%; cursor: crosshair; }
     #hud {
-      position: absolute;
-      top: 16px;
-      left: 16px;
-      font-family: 'Courier New', monospace;
-      font-size: 12px;
-      color: #00f5d4;
-      background: rgba(2, 11, 20, 0.7);
-      padding: 12px;
-      border: 1px solid #00f5d422;
-      pointer-events: none;
-      white-space: pre;
-      line-height: 1.6;
+      position: absolute; top: 16px; left: 16px;
+      font-family: 'Courier New', monospace; font-size: 12px;
+      color: #00f5d4; background: rgba(2,11,20,0.75);
+      padding: 12px; border: 1px solid rgba(0,245,212,0.15);
+      pointer-events: none; white-space: pre; line-height: 1.6;
+    }
+    #start-screen {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 16px;
+    }
+    #start-title {
+      font-family: 'Courier New', monospace; font-size: 22px;
+      color: #00f5d4; letter-spacing: 4px;
+    }
+    #start-sub {
+      font-family: 'Courier New', monospace; font-size: 11px;
+      color: rgba(0,245,212,0.5); letter-spacing: 1px; text-align: center;
+      line-height: 1.8;
     }
     #start {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: transparent;
-      border: 1px solid #00f5d4;
-      color: #00f5d4;
-      font-family: 'Courier New', monospace;
-      font-size: 14px;
-      padding: 12px 32px;
-      cursor: pointer;
-      letter-spacing: 2px;
+      background: transparent; border: 1px solid #00f5d4;
+      color: #00f5d4; font-family: 'Courier New', monospace;
+      font-size: 13px; padding: 10px 32px; cursor: pointer;
+      letter-spacing: 3px; margin-top: 8px;
     }
-    #start:hover { background: #00f5d411; }
+    #start:hover { background: rgba(0,245,212,0.08); }
+    #hint {
+      position: absolute; bottom: 70px; left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Courier New', monospace; font-size: 10px;
+      color: rgba(0,245,212,0.35); pointer-events: none;
+      white-space: nowrap; display: none;
+    }
+    input[type=range] {
+      -webkit-appearance: none; height: 3px;
+      background: #1a4a6b; outline: none; cursor: pointer;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 10px; height: 10px;
+      border-radius: 50%; background: #00f5d4; cursor: pointer;
+    }
   </style>
 </head>
 <body>
   <canvas id="ocean"></canvas>
   <div id="hud"></div>
-  <button id="start">ENTER THE OCEAN</button>
+  <div id="start-screen">
+    <div id="start-title">WAVESYNTH</div>
+    <div id="start-sub">
+      Un cachalote nada en el Atlántico Sur.<br>
+      Su profundidad controla el filtro.<br>
+      Su posición, el tono y el paneo.<br>
+      <span style="opacity:0.4">— arrastrá el canvas para controlarlo vos —</span>
+    </div>
+    <button id="start">▶ ENTRAR AL OCÉANO</button>
+  </div>
+  <div id="hint">arrastrá para controlar la ballena · panel de FX abajo</div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
