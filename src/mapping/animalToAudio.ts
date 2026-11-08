@@ -12,8 +12,8 @@ function mapHeightToSwellAmp(heightM: number | null): number {
 }
 
 function mapWindToFmIndex(windMS: number | null): number {
-  if (windMS === null) return 0.5
-  return Math.min(5, windMS / 33 * 5)
+  if (windMS === null) return 0
+  return Math.min(1.0, windMS / 33)
 }
 
 function mapHeadingToFmRatio(headingDeg: number | null): number {
@@ -43,6 +43,16 @@ function mapLonToPan(lon: number | null): number {
 
 export function mapToAudioParams(animal: AnimalState, ocean: OceanState): AudioParams {
   const depthMix = mapDepthToMix(animal.depthM)
+
+  // Mapeo gestual del animal surfeando sobre la forma de onda
+  let harmonicFold = 0.0
+  let resonanceQ = 0.7
+  if (animal.surfZone === 'lip') {
+    harmonicFold = 0.55 // Distorsión y plegado de armónicos al cortar la cresta
+  } else if (animal.surfZone === 'barrel') {
+    resonanceQ = 2.8 // Resonancia hueca y tubular
+  }
+
   return {
     swellFreq: mapPeriodToSwellFreq(ocean.peakPeriodS),
     swellAmp: mapHeightToSwellAmp(ocean.waveHeightM),
@@ -55,5 +65,7 @@ export function mapToAudioParams(animal: AnimalState, ocean: OceanState): AudioP
     depthDelayMs: 30 + depthMix * 470,
     filterCutoffNorm: mapTempToFilterCutoff(ocean.waterTempC),
     panNorm: mapLonToPan(animal.lon),
+    harmonicFold,
+    resonanceQ,
   }
 }

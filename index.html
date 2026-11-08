@@ -1,47 +1,57 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>WaveSynth</title>
+  <title>WaveSynth — Oceanographic Wavetable & Surfing Audio Interface</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #020b14; overflow: hidden; width: 100vw; height: 100vh; }
+    body { background: #01060d; overflow: hidden; width: 100vw; height: 100vh; user-select: none; }
     #ocean { display: block; width: 100%; height: 100%; cursor: crosshair; }
     #hud {
       position: absolute; top: 16px; left: 16px;
-      font-family: 'Courier New', monospace; font-size: 12px;
-      color: #00f5d4; background: rgba(2,11,20,0.75);
-      padding: 12px; border: 1px solid rgba(0,245,212,0.15);
+      font-family: 'Courier New', monospace; font-size: 11px;
+      color: #00f5d4; background: rgba(2,11,20,0.85);
+      padding: 14px 18px; border: 1px solid rgba(0,245,212,0.25);
       pointer-events: none; white-space: pre; line-height: 1.6;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5); backdrop-filter: blur(8px);
     }
     #start-screen {
       position: absolute; inset: 0;
       display: flex; flex-direction: column;
       align-items: center; justify-content: center; gap: 16px;
+      background: rgba(1, 6, 13, 0.94); backdrop-filter: blur(12px);
+      z-index: 100;
     }
     #start-title {
-      font-family: 'Courier New', monospace; font-size: 22px;
-      color: #00f5d4; letter-spacing: 4px;
+      font-family: 'Courier New', monospace; font-size: 26px;
+      color: #00f5d4; letter-spacing: 6px; font-weight: bold;
+      text-shadow: 0 0 20px rgba(0,245,212,0.5);
     }
     #start-sub {
-      font-family: 'Courier New', monospace; font-size: 11px;
-      color: rgba(0,245,212,0.5); letter-spacing: 1px; text-align: center;
-      line-height: 1.8;
+      font-family: 'Courier New', monospace; font-size: 12px;
+      color: rgba(200,245,255,0.7); letter-spacing: 1.5px; text-align: center;
+      line-height: 2; max-width: 600px; padding: 0 20px;
     }
     #start {
-      background: transparent; border: 1px solid #00f5d4;
+      background: rgba(0,245,212,0.08); border: 1.5px solid #00f5d4;
       color: #00f5d4; font-family: 'Courier New', monospace;
-      font-size: 13px; padding: 10px 32px; cursor: pointer;
-      letter-spacing: 3px; margin-top: 8px;
+      font-size: 13px; font-weight: bold; padding: 12px 36px; cursor: pointer;
+      letter-spacing: 3px; margin-top: 14px; transition: all 0.25s ease;
+      box-shadow: 0 0 15px rgba(0,245,212,0.2);
     }
-    #start:hover { background: rgba(0,245,212,0.08); }
+    #start:hover {
+      background: #00f5d4; color: #01060d;
+      box-shadow: 0 0 25px rgba(0,245,212,0.6);
+    }
     #hint {
-      position: absolute; bottom: 70px; left: 50%;
+      position: absolute; bottom: 85px; left: 50%;
       transform: translateX(-50%);
-      font-family: 'Courier New', monospace; font-size: 10px;
-      color: rgba(0,245,212,0.35); pointer-events: none;
-      white-space: nowrap; display: none;
+      font-family: 'Courier New', monospace; font-size: 11px;
+      color: #00f5d4; background: rgba(2,11,20,0.85);
+      border: 1px solid rgba(0,245,212,0.3); padding: 6px 16px;
+      pointer-events: none; white-space: nowrap; display: none;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
     }
     input[type=range] {
       -webkit-appearance: none; height: 3px;
@@ -50,6 +60,7 @@
     input[type=range]::-webkit-slider-thumb {
       -webkit-appearance: none; width: 10px; height: 10px;
       border-radius: 50%; background: #00f5d4; cursor: pointer;
+      box-shadow: 0 0 8px #00f5d4;
     }
   </style>
 </head>
@@ -57,16 +68,16 @@
   <canvas id="ocean"></canvas>
   <div id="hud"></div>
   <div id="start-screen">
-    <div id="start-title">WAVESYNTH</div>
+    <div id="start-title">🌊 WAVESYNTH 🏄‍♂️</div>
     <div id="start-sub">
-      Un cachalote nada en el Atlántico Sur.<br>
-      Su profundidad controla el filtro.<br>
-      Su posición, el tono y el paneo.<br>
-      <span style="opacity:0.4">— arrastrá el canvas para controlarlo vos —</span>
+      La superficie del mar <strong>ES</strong> la forma de onda acústica en tiempo real.<br>
+      La altura de ola, el período y el viento del planeta esculpen el oscilador.<br>
+      <span style="color:#ff9f1c">Surfeá la onda con el mouse o ←→ para alterar los armónicos en vivo.</span><br>
+      <span style="opacity:0.5; font-size:11px;">(Cresta = saturación armónica · Tubo = resonancia hueca · Valle = sub-bass)</span>
     </div>
-    <button id="start">▶ ENTRAR AL OCÉANO</button>
+    <button id="start">▶ ENTRAR Y SURFEAR EL SONIDO</button>
   </div>
-  <div id="hint">arrastrá para controlar la ballena · panel de FX abajo</div>
+  <div id="hint">🏄 Arrastrá el mouse o usá ←→ para surfear la sinewave · ESC = autopilot</div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

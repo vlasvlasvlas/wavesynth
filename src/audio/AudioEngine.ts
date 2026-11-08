@@ -35,6 +35,7 @@ class OceanSynthProcessor extends AudioWorkletProcessor {
       swellFreq:110, swellAmp:0.4, fmIndex:0.5, fmFreqRatio:2,
       foamAmp:0, foamDecay:0.003, depthMix:0, depthFeedback:0.2,
       depthDelayMs:30, filterCutoffNorm:0.7, panNorm:0.5,
+      harmonicFold:0.0, resonanceQ:0.7,
     };
 
     this.sl = {};
@@ -53,12 +54,13 @@ class OceanSynthProcessor extends AudioWorkletProcessor {
     };
   }
 
-  updateBiquadLP(cutoffNorm) {
+  updateBiquadLP(cutoffNorm, qVal = 0.7) {
     const freq = Math.max(80, Math.min(20000, cutoffNorm * 20000));
+    const q = Math.max(0.5, Math.min(5.0, qVal));
     const w0 = 2 * Math.PI * freq / SR;
     const cosW = Math.cos(w0);
     const sinW = Math.sin(w0);
-    const alpha = sinW / (2 * 0.707);
+    const alpha = sinW / (2 * q);
     const a0 = 1 + alpha;
     this.biquadCoeffs = {
       b0: (1 - cosW) / 2 / a0,
@@ -86,6 +88,8 @@ class OceanSynthProcessor extends AudioWorkletProcessor {
       const depthDelayMs  = this.sl.depthDelayMs.tick(this.targets.depthDelayMs);
       const cutoffNorm    = this.sl.filterCutoffNorm.tick(this.targets.filterCutoffNorm);
       const panNorm       = this.sl.panNorm.tick(this.targets.panNorm);
+      const harmonicFold  = this.sl.harmonicFold.tick(this.targets.harmonicFold);
+      const resonanceQ    = this.sl.resonanceQ.tick(this.targets.resonanceQ);
 
       this.phase += (swellFreq * 2 * Math.PI) / SR;
       if (this.phase > Math.PI * 2) this.phase -= Math.PI * 2;
@@ -93,10 +97,15 @@ class OceanSynthProcessor extends AudioWorkletProcessor {
       this.fmPhase += (swellFreq * fmFreqRatio * 2 * Math.PI) / SR;
       if (this.fmPhase > Math.PI * 2) this.fmPhase -= Math.PI * 2;
 
-      const modulated = Math.sin(this.phase + Math.sin(this.fmPhase) * fmIndex) * swellAmp;
+      let rawOsc = Math.sin(this.phase + Math.sin(this.fmPhase) * fmIndex);
+      // Wavefolding cuando el surfista ataca la cresta de la ola
+      if (harmonicFold > 0.02) {
+        rawOsc = Math.sin(rawOsc * (1.0 + harmonicFold * 2.8));
+      }
+      const modulated = rawOsc * swellAmp;
 
-      this.foamEnv = this.foamEnv * (1 - foamDecay) + foamAmpT * foamDecay * 10;
-      const foam = (Math.random() * 2 - 1) * Math.min(1, this.foamEnv) * 0.25;
+      this.foamEnv = this.foamEnv * (1 - foamDecay) + foamAmpT * foamDecay;
+      const foam = (Math.random() * 2 - 1) * this.foamEnv * 0.08;
 
       const delaySamples = Math.min(MAX_DELAY_SAMPLES - 1, Math.max(1, Math.round(depthDelayMs * SR / 1000)));
       const readIdx = (this.delayPtr - delaySamples + MAX_DELAY_SAMPLES) % MAX_DELAY_SAMPLES;
@@ -109,7 +118,7 @@ class OceanSynthProcessor extends AudioWorkletProcessor {
 
       this.filterCounter++;
       if (this.filterCounter >= 128) {
-        this.updateBiquadLP(cutoffNorm);
+        this.updateBiquadLP(cutoffNorm, resonanceQ);
         this.filterCounter = 0;
       }
       const { b0, b1, b2, a1, a2 } = this.biquadCoeffs;
@@ -134,6 +143,7 @@ export class AudioEngine {
   private ctx: AudioContext | null = null
   private node: AudioWorkletNode | null = null
   private gain: GainNode | null = null
+  private analyser: AnalyserNode | null = null
 
   async start(): Promise<void> {
     this.ctx = new AudioContext({ sampleRate: 48000 })
@@ -150,12 +160,31 @@ export class AudioEngine {
     this.node = new AudioWorkletNode(this.ctx, 'ocean-synth', { outputChannelCount: [2] })
     this.gain = this.ctx.createGain()
     this.gain.gain.value = 0.8
-    this.node.connect(this.gain)
-    this.gain.connect(this.ctx.destination)
+
+    if (typeof this.ctx.createAnalyser === 'function') {
+      this.analyser = this.ctx.createAnalyser()
+      this.analyser.fftSize = 1024
+      this.analyser.smoothingTimeConstant = 0.3
+      this.node.connect(this.gain)
+      this.gain.connect(this.analyser)
+      this.analyser.connect(this.ctx.destination)
+    } else {
+      this.node.connect(this.gain)
+      this.gain.connect(this.ctx.destination)
+    }
   }
 
   updateParams(params: AudioParams): void {
     this.node?.port.postMessage(params)
+  }
+
+  getWaveformData(output?: Float32Array): Float32Array {
+    const size = this.analyser?.fftSize ?? 1024
+    const buf = output && output.length === size ? output : new Float32Array(size)
+    if (this.analyser && typeof this.analyser.getFloatTimeDomainData === 'function') {
+      this.analyser.getFloatTimeDomainData(buf)
+    }
+    return buf
   }
 
   setVolume(v: number): void {
@@ -167,5 +196,6 @@ export class AudioEngine {
     this.ctx = null
     this.node = null
     this.gain = null
+    this.analyser = null
   }
 }

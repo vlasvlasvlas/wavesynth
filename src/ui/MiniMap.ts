@@ -1,18 +1,34 @@
 export class MiniMap {
   private canvas: HTMLCanvasElement
   private ctx: CanvasRenderingContext2D
+  public onSelectCoordinates?: (lat: number, lon: number) => void
 
   constructor() {
     this.canvas = document.createElement('canvas')
     this.canvas.width = 200
     this.canvas.height = 100
+    this.canvas.title = 'Click en el océano para teletransportar el sintetizador'
     this.canvas.style.cssText = `
       position:absolute; top:16px; right:16px;
-      border:1px solid rgba(0,245,212,0.2);
-      cursor:default;
+      border:1px solid rgba(0,245,212,0.3);
+      cursor:crosshair; box-shadow:0 8px 24px rgba(0,0,0,0.6);
+      background:#040f1e;
     `
     document.body.appendChild(this.canvas)
     this.ctx = this.canvas.getContext('2d')!
+
+    this.canvas.addEventListener('click', (e) => {
+      const rect = this.canvas.getBoundingClientRect()
+      const clickX = e.clientX - rect.left
+      const clickY = e.clientY - rect.top
+      const normX = Math.max(0, Math.min(1, clickX / this.canvas.width))
+      const normY = Math.max(0, Math.min(1, clickY / this.canvas.height))
+
+      const lon = parseFloat((normX * 360 - 180).toFixed(2))
+      const lat = parseFloat((90 - normY * 180).toFixed(2))
+
+      this.onSelectCoordinates?.(lat, lon)
+    })
   }
 
   update(lat: number | null, lon: number | null): void {
@@ -56,7 +72,7 @@ export class MiniMap {
     const y = ((90 - lat) / 180) * H
 
     // Pulse ring
-    ctx.strokeStyle = 'rgba(0,245,212,0.25)'
+    ctx.strokeStyle = 'rgba(0,245,212,0.4)'
     ctx.lineWidth = 1
     ctx.beginPath()
     ctx.arc(x, y, 7, 0, Math.PI * 2)
@@ -72,8 +88,8 @@ export class MiniMap {
     ctx.shadowBlur = 0
 
     // Label
-    ctx.fillStyle = 'rgba(0,245,212,0.6)'
+    ctx.fillStyle = 'rgba(0,245,212,0.85)'
     ctx.font = '8px Courier New'
-    ctx.fillText(`${lat >= 0 ? lat.toFixed(1)+'°N' : Math.abs(lat).toFixed(1)+'°S'}  ${lon >= 0 ? lon.toFixed(1)+'°E' : Math.abs(lon).toFixed(1)+'°W'}`, 4, H - 4)
+    ctx.fillText(`${lat >= 0 ? lat.toFixed(1)+'°N' : Math.abs(lat).toFixed(1)+'°S'}  ${lon >= 0 ? lon.toFixed(1)+'°E' : Math.abs(lon).toFixed(1)+'°W'} [click map]`, 4, H - 4)
   }
 }
