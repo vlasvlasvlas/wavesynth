@@ -46,16 +46,6 @@ let currentTimbreIdx = 0
 
 function applyTimbre(idx: number): void {
   currentTimbreIdx = Math.max(0, idx)
-  const timbre = FISH_TIMBRES[currentTimbreIdx]
-  if (!timbre) return
-  // Actualiza los peces ya vivos
-  for (const f of lumiFish) {
-    if (f.oscNode) f.oscNode.type = timbre.oscType
-    if (f.filterNode && timbre.filterFreq) {
-      f.filterNode.frequency.value = timbre.filterFreq
-      f.filterNode.Q.value = timbre.filterQ ?? 1
-    }
-  }
 }
 
 const FISH_COLORS = [
@@ -88,6 +78,18 @@ function getScale(): number[] {
 
 const lumiFish: LumiFish[] = []
 let fishVolume = 0.5
+let fishBus: GainNode | null = null
+
+function ensureFishBus(): GainNode | null {
+  const actx = engine.getContext()
+  if (!actx) return null
+  if (!fishBus || fishBus.context !== actx) {
+    fishBus = actx.createGain()
+    fishBus.gain.value = fishVolume
+    fishBus.connect(actx.destination)
+  }
+  return fishBus
+}
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
 const engine = new AudioEngine()
@@ -192,28 +194,29 @@ function tickArrows(): void {
   if (keysHeld.size === 0) { pitchActive = false; return }
 
   // ←→ mueve el barco con inercia — izq oscurece el filtro, der lo abre
-  if (keysHeld.has('ArrowLeft'))  surfXVel -= 0.00008
-  if (keysHeld.has('ArrowRight')) surfXVel += 0.00008
-  surfXVel  *= 0.97  // fricción suave — más inercia, movimiento lentísimo
+  if (keysHeld.has('ArrowLeft'))  surfXVel -= surfXVel > 0 ? 0.00028 : 0.00008
+  if (keysHeld.has('ArrowRight')) surfXVel += surfXVel < 0 ? 0.00028 : 0.00008
+  const pressing = keysHeld.has('ArrowLeft') || keysHeld.has('ArrowRight')
+  surfXVel  *= pressing ? 0.985 : 0.995  // frenado cuando se aprieta, glide largo al soltar
   surfXNorm  = Math.max(0.04, Math.min(0.96, surfXNorm + surfXVel))
 
-  // ↑↓ controla el pitch — arranca desde 0 con un kick mínimo para no quedar pegado
+  // ↑↓ controla el pitch — kick a 2.0 si estaba en silencio para entrar directo a zona audible
   if (keysHeld.has('ArrowUp')) {
-    const base = surfPitchMult < 0.05 ? 0.1 : surfPitchMult
-    surfPitchMult = Math.min(10.0, base * 1.009)
+    const base = surfPitchMult < 0.5 ? 2.0 : surfPitchMult
+    surfPitchMult = Math.min(10.0, base * 1.007)
     pitchActive = true
   }
   if (keysHeld.has('ArrowDown')) {
-    const next = surfPitchMult / 1.009
-    surfPitchMult = next < 0.05 ? 0 : next
+    const next = surfPitchMult / 1.007
+    surfPitchMult = next < 0.08 ? 0 : next
     pitchActive = true
   }
   if (!keysHeld.has('ArrowUp') && !keysHeld.has('ArrowDown')) pitchActive = false
 }
 
-// Portamento: ease-in suave al subir frecuencia, ease-out largo al soltar (glide pronunciado)
+// Portamento: ease-in rápido al subir, glide suave al soltar
 function tickPortamento(): void {
-  const rate = pitchActive ? 0.05 : 0.018
+  const rate = pitchActive ? 0.12 : 0.025
   pitchMultSmooth += (surfPitchMult - pitchMultSmooth) * rate
 }
 
@@ -304,25 +307,22 @@ function spawnFish(canvasX?: number, canvasY?: number): void {
   const freq = pool[Math.floor(Math.random() * pool.length)]
   const color = FISH_COLORS[lumiFish.length % FISH_COLORS.length]
 
+  const bus = ensureFishBus()
+  if (!bus) return
+
   const timbre = FISH_TIMBRES[currentTimbreIdx] ?? FISH_TIMBRES[0]
   const osc = actx.createOscillator()
+  const filterNode = actx.createBiquadFilter()
   const gain = actx.createGain()
   osc.type = timbre.oscType
   osc.frequency.value = freq
+  filterNode.type = timbre.filterType ?? 'allpass'
+  filterNode.frequency.value = timbre.filterFreq ?? 1000
+  filterNode.Q.value = timbre.filterQ ?? 1
   gain.gain.value = 0
-
-  let filterNode: BiquadFilterNode | null = null
-  if (timbre.filterType) {
-    filterNode = actx.createBiquadFilter()
-    filterNode.type = timbre.filterType
-    filterNode.frequency.value = timbre.filterFreq ?? 1000
-    filterNode.Q.value = timbre.filterQ ?? 1
-    osc.connect(filterNode)
-    filterNode.connect(gain)
-  } else {
-    osc.connect(gain)
-  }
-  gain.connect(actx.destination)
+  osc.connect(filterNode)
+  filterNode.connect(gain)
+  gain.connect(bus)
   osc.start()
 
   // dirección horizontal aleatoria por pez (algunos van izq, otros der)
@@ -354,8 +354,14 @@ function tickFish(dt: number): void {
     f.phase += 0.07 + Math.abs(f.vx + f.vy) * 0.015
 
     if (f.age > f.maxAge + 3500 || f.x < -180 || f.x > W + 180 || f.y > H + 100) {
-      if (actx && f.gainNode) f.gainNode.gain.setTargetAtTime(0, actx.currentTime, 0.3)
-      setTimeout(() => { try { f.oscNode?.stop(); f.filterNode?.disconnect() } catch { /* ya parado */ } }, 500)
+      if (actx && f.gainNode) f.gainNode.gain.setTargetAtTime(0, actx.currentTime, 0.2)
+      const dead = f
+      setTimeout(() => {
+        try { dead.oscNode?.stop() } catch { }
+        try { dead.oscNode?.disconnect() } catch { }
+        try { dead.filterNode?.disconnect() } catch { }
+        try { dead.gainNode?.disconnect() } catch { }
+      }, 400)
       lumiFish.splice(i, 1)
       continue
     }
@@ -398,10 +404,9 @@ function tickFish(dt: number): void {
     }
 
     if (actx && f.gainNode) {
-      const base = 0.12 * fishVolume
       const vol = f.leaving
-        ? base * Math.max(0, 1 - (f.age - f.maxAge) / 3500)
-        : base
+        ? 0.12 * Math.max(0, 1 - (f.age - f.maxAge) / 3500)
+        : 0.12
       f.gainNode.gain.setTargetAtTime(vol, actx.currentTime, 0.15)
     }
   }
@@ -550,7 +555,10 @@ function buildControls(): void {
   }
 
   panel.appendChild(slider('VOL', 0, 1, 0.8, 0.01, (v) => engine.setVolume(v)).wrap)
-  panel.appendChild(slider('PECES', 0, 1, 0.5, 0.01, (v) => { fishVolume = v }).wrap)
+  panel.appendChild(slider('PECES', 0, 1, 0.5, 0.01, (v) => {
+    fishVolume = v
+    if (fishBus) fishBus.gain.value = v
+  }).wrap)
 
   panel.appendChild(sep())
 
@@ -618,11 +626,14 @@ function applyFX(params: AudioParams, dt: number): AudioParams {
   const freq = Math.min(1000, Math.max(0, params.swellFreq * pitchMultSmooth))
   currentFreq = freq
 
-  // Posición X del barco → filtro pasa-bajos: izq = oscuro/cerrado, der = brillante/abierto
-  const xCutoff  = Math.pow(surfXNorm, 1.3) * 1.1          // 0.04→~0.03, 0.5→0.41, 0.96→~1.0
+  // Posición X del barco → filtro VCF: izq = oscuro/cerrado, der = brillante/abierto
+  // Curva cuadrática para más sensibilidad en la zona baja (donde el efecto se escucha más)
+  const xCutoff  = surfXNorm * surfXNorm                    // 0→0, 0.5→0.25, 1→1 (cuadrática)
   const lfoVal   = Math.sin(lfoPhase)
-  const lfoDepth = 0.07
-  const cutoff   = Math.min(1, Math.max(0.04, xCutoff * fx.brilloMult + lfoVal * lfoDepth))
+  const lfoDepth = 0.04
+  const cutoff   = Math.min(1, Math.max(0, xCutoff + lfoVal * lfoDepth))
+  // Resonancia clásica de VCF: sube al cerrar el filtro (izq), baja al abrir (der)
+  const resonance = 0.4 + (1 - surfXNorm) * 5.6            // 0.4 (der abierto) → 6.0 (izq cerrado)
 
   return {
     ...params,
@@ -631,6 +642,7 @@ function applyFX(params: AudioParams, dt: number): AudioParams {
     // FM mínimo de 0.07 siempre activo → da irregularidad orgánica a la forma de onda visual
     fmIndex:          Math.min(2.5, Math.max(0.07, params.fmIndex * fx.vientoFmMult)),
     filterCutoffNorm: cutoff,
+    resonanceQ:       resonance,
     waveType:         currentWaveType,
     whaleFreq:        whale.state.freq,
     whaleAmp:         whale.state.amp,
@@ -647,6 +659,10 @@ let prevT = 0
 function loop(t: number): void {
   const dt = t - prevT
   prevT = t
+
+  // Reanudar AudioContext si fue suspendido (pérdida de foco del navegador, etc.)
+  const actxState = engine.getContext()
+  if (actxState && actxState.state === 'suspended') actxState.resume()
 
   tickArrows()
   tickPortamento()

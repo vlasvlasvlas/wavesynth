@@ -34,6 +34,7 @@ export class TelemetryHUD {
       pointer-events:none;white-space:pre;line-height:1.7;
       min-width:270px;box-shadow:0 8px 30px rgba(0,0,0,0.65);
       backdrop-filter:blur(8px);
+      max-height:calc(100vh - 120px);overflow-y:auto;
     `
   }
 

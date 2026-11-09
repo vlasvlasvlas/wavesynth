@@ -65,7 +65,8 @@ class OceanSynthProcessor extends AudioWorkletProcessor {
   }
 
   updateBiquadLP(cutoffNorm, qVal = 0.7) {
-    const freq  = Math.max(80, Math.min(20000, cutoffNorm * 20000));
+    // Mapeo exponencial: 0→60Hz (cerrado), 0.5→1050Hz, 1→18000Hz (abierto)
+    const freq  = Math.max(60, Math.min(18000, 60 * Math.pow(300, Math.max(0, cutoffNorm))));
     const q     = Math.max(0.5, Math.min(5.0, qVal));
     const w0    = 2 * Math.PI * freq / SR;
     const cosW  = Math.cos(w0);
@@ -241,6 +242,8 @@ export class AudioEngine {
   setVolume(v: number): void {
     if (this.gain) this.gain.gain.value = Math.max(0, Math.min(1, v))
   }
+
+  getContext(): AudioContext | null { return this.ctx }
 
   stop(): void {
     this.ctx?.close()

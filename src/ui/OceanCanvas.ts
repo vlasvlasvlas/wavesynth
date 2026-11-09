@@ -1,6 +1,13 @@
 import type { AnimalState, OceanState } from '../types'
 
-const SURFACE_Y_RATIO = 0.30
+export interface FishRenderData {
+  x: number; y: number
+  vx: number; vy: number
+  color: string; size: number
+  phase: number; leaving: boolean
+}
+
+const SURFACE_Y_RATIO = 0.42
 const BOTTOM_Y_RATIO  = 0.95
 const WATER_ZONE = BOTTOM_Y_RATIO - SURFACE_Y_RATIO
 const MAX_DEPTH = 2000
@@ -27,9 +34,7 @@ interface SprayParticle {
 
 interface BoatPhysics {
   y: number
-  vy: number
   angle: number
-  vAngle: number
   prevT: number
   initialized: boolean
 }
@@ -37,14 +42,17 @@ interface BoatPhysics {
 export class OceanCanvas {
   private canvas: HTMLCanvasElement
   private ctx: CanvasRenderingContext2D
+  private boatCanvas: HTMLCanvasElement
+  private boatCtx: CanvasRenderingContext2D
   private sprayParticles: SprayParticle[] = []
   private waveformBuffer: Float32Array = new Float32Array(1024)
+  private waveYAtFn: ((x: number) => number) | null = null
+
+  getWaveYAt(): ((x: number) => number) | null { return this.waveYAtFn }
 
   private boatPhysics: BoatPhysics = {
     y: 0,
-    vy: 0,
     angle: 0,
-    vAngle: 0,
     prevT: 0,
     initialized: false,
   }
@@ -52,13 +60,22 @@ export class OceanCanvas {
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
     this.ctx = canvas.getContext('2d')!
+
+    // Canvas overlay exclusivo para el barco — se borra cada frame → sin efecto fantasma
+    this.boatCanvas = document.createElement('canvas')
+    this.boatCanvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2;'
+    document.body.appendChild(this.boatCanvas)
+    this.boatCtx = this.boatCanvas.getContext('2d')!
+
     this.resize()
     window.addEventListener('resize', () => this.resize())
   }
 
   private resize(): void {
-    this.canvas.width = window.innerWidth
+    this.canvas.width  = window.innerWidth
     this.canvas.height = window.innerHeight
+    this.boatCanvas.width  = window.innerWidth
+    this.boatCanvas.height = window.innerHeight
   }
 
   setWaveformData(data: Float32Array): void {
@@ -77,6 +94,7 @@ export class OceanCanvas {
     waveType = 0,
     currentFreq = 110,
     lfoPhase = 0,
+    fish: FishRenderData[] = [],
   ): {
     surfZone: 'lip' | 'face' | 'barrel' | 'trough'
     slopeDeg: number
@@ -109,7 +127,7 @@ export class OceanCanvas {
     // ── 2. FORMA DE ONDA REACTIVA A LA FRECUENCIA Y AL LFO ────────────────────
     const hs   = ocean.waveHeightM ?? 1.8
     const wind = ocean.windSpeedMS ?? 12
-    const baseAmpPx = Math.min(H * 0.38, Math.max(45, hs * 42))
+    const baseAmpPx = Math.min(H * 0.40, Math.max(45, hs * 42))
 
     // FÍSICA DE LA ONDA: Cantidad de ciclos visibles a lo largo de la pantalla
     // A frecuencia baja (ej. 40 Hz) = ~1.2 ciclos (ola gigante, ancha y espaciada)
@@ -128,6 +146,7 @@ export class OceanCanvas {
     const wfLen = wf.length
 
     // Función matemática que calcula la altura Y de la superficie en cualquier píxel x
+    // Se guarda la referencia para que código externo (peces) pueda constrainar su posición
     const waveYAt = (x: number): number => {
       const normX = Math.max(0, Math.min(1, x / W))
       
@@ -170,6 +189,8 @@ export class OceanCanvas {
       return surfaceY - (effectiveSample * baseAmpPx) + macroSwell
     }
 
+    this.waveYAtFn = waveYAt
+
     // ── 3. Cuerpo de agua con gradiente abisal ─────────────────────────────────
     ctx.beginPath()
     ctx.moveTo(0, H)
@@ -181,9 +202,9 @@ export class OceanCanvas {
     ctx.closePath()
 
     const waterGrad = ctx.createLinearGradient(0, surfaceY - baseAmpPx, 0, bottomY)
-    waterGrad.addColorStop(0,    'rgba(0, 95, 135, 0.95)')
-    waterGrad.addColorStop(0.18, 'rgba(0, 48, 82, 0.97)')
-    waterGrad.addColorStop(0.5,  'rgba(1, 20, 40, 0.99)')
+    waterGrad.addColorStop(0,    'rgba(0, 95, 135, 0.72)')
+    waterGrad.addColorStop(0.18, 'rgba(0, 48, 82, 0.88)')
+    waterGrad.addColorStop(0.5,  'rgba(1, 20, 40, 0.98)')
     waterGrad.addColorStop(1,    'rgba(0, 4, 10, 1.0)')
     ctx.fillStyle = waterGrad
     ctx.fill()
@@ -239,41 +260,31 @@ export class OceanCanvas {
     const boatLength = 44
     const halfLen = boatLength / 2
 
-    // Puntos de flotación: proa (adelante) y popa (atrás)
-    const yStern = waveYAt(ax - halfLen) // popa
-    const yBow   = waveYAt(ax + halfLen) // proa
-    const targetY     = (yStern + yBow) / 2
-    const targetAngle = Math.atan2(yBow - yStern, boatLength)
+    // 5 puntos de flotación distribuidos a lo largo del casco para mejor lectura de la ola
+    const probes = [-halfLen, -halfLen * 0.5, 0, halfLen * 0.5, halfLen]
+    let sumProbeY = 0
+    for (const dx of probes) sumProbeY += waveYAt(ax + dx)
+    const targetY     = sumProbeY / probes.length
+    const ySternPt    = waveYAt(ax - halfLen * 0.85)
+    const yBowPt      = waveYAt(ax + halfLen * 0.85)
+    const targetAngle = Math.atan2(yBowPt - ySternPt, boatLength * 1.7)
 
-    // Inicialización de la física del barco en el primer frame
-    if (!this.boatPhysics.initialized) {
-      this.boatPhysics.y = targetY
-      this.boatPhysics.angle = targetAngle
-      this.boatPhysics.initialized = true
-      this.boatPhysics.prevT = t
+    const bp = this.boatPhysics
+
+    // Inicialización del primer frame
+    if (!bp.initialized) {
+      bp.y = targetY; bp.angle = targetAngle
+      bp.initialized = true; bp.prevT = t
     }
 
-    const dtMs = Math.min(50, t - this.boatPhysics.prevT)
-    this.boatPhysics.prevT = t
+    const dtMs = Math.min(50, t - bp.prevT)
+    bp.prevT = t
 
-    // Sistema de resorte amortiguado de flotabilidad náutica
-    const wt = Math.round(waveType) % 4
-    const springK = [0.12, 0.32, 0.18, 0.14][wt]
-    const damping = [0.88, 0.74, 0.80, 0.86][wt]
+    // Seguimiento directo con lerp — sin rebote, el barco se pega a la ola
+    const follow = 1 - Math.pow(0.04, dtMs / 16)  // frame-rate independiente
+    bp.y     += (targetY     - bp.y)     * follow
+    bp.angle += (targetAngle - bp.angle) * follow * 0.85
 
-    const subSteps = Math.max(1, Math.round(dtMs / 8))
-    for (let s = 0; s < subSteps; s++) {
-      // Fuerza vertical de flotabilidad (empuje de Arquímedes dinámico)
-      const forceY = springK * (targetY - this.boatPhysics.y)
-      this.boatPhysics.vy = this.boatPhysics.vy * damping + forceY
-      this.boatPhysics.y += this.boatPhysics.vy
-
-      // Fuerza de cabeceo angular (pitch del barco sobre la ola)
-      const diffAngle = targetAngle - this.boatPhysics.angle
-      const forceAngle = springK * 1.1 * diffAngle
-      this.boatPhysics.vAngle = this.boatPhysics.vAngle * damping + forceAngle
-      this.boatPhysics.angle += this.boatPhysics.vAngle
-    }
 
     const ay = this.boatPhysics.y
     const angleRad = this.boatPhysics.angle
@@ -302,114 +313,142 @@ export class OceanCanvas {
       })
     }
 
-    // Render de spray y estela de agua
-    ctx.fillStyle = 'rgba(220, 250, 255, 0.75)'
+    // ── 6 & 7. BARCO + SPRAY + GUÍA → canvas overlay (se borra cada frame → sin fantasma) ──
+    const bc = this.boatCtx
+    bc.clearRect(0, 0, W, H)
+
+    // ── Peces luminosos (siempre debajo de la superficie del agua) ───────────
+    for (const f of fish) {
+      const minY = waveYAt(f.x) + 10
+      const drawY = Math.max(f.y, minY)
+      const angle = Math.atan2(f.vy, f.vx)
+      const wiggle = Math.sin(f.phase) * f.size * 0.15
+      const alpha = f.leaving ? 0.4 : 0.85
+
+      bc.save()
+      bc.translate(f.x, drawY)
+      bc.rotate(angle)
+
+      bc.shadowColor = f.color
+      bc.shadowBlur = 14
+      bc.globalAlpha = alpha
+      bc.fillStyle = f.color
+      // Cuerpo
+      bc.beginPath()
+      bc.ellipse(0, wiggle, f.size, f.size * 0.4, 0, 0, Math.PI * 2)
+      bc.fill()
+      // Cola
+      bc.globalAlpha = alpha * 0.7
+      bc.beginPath()
+      bc.moveTo(-f.size * 0.85, wiggle)
+      bc.lineTo(-f.size * 1.7, -f.size * 0.45)
+      bc.lineTo(-f.size * 1.7, f.size * 0.45)
+      bc.closePath()
+      bc.fill()
+      // Ojo
+      bc.shadowBlur = 0
+      bc.globalAlpha = f.leaving ? 0.4 : 1.0
+      bc.fillStyle = '#ffffff'
+      bc.beginPath()
+      bc.arc(f.size * 0.5, wiggle - f.size * 0.1, f.size * 0.13, 0, Math.PI * 2)
+      bc.fill()
+
+      bc.restore()
+    }
+    bc.globalAlpha = 1.0
+    bc.shadowBlur = 0
+    bc.shadowColor = 'transparent'
+
+    // Spray de espuma — redibujado íntegro cada frame sobre el overlay
+    bc.fillStyle = 'rgba(220, 250, 255, 0.75)'
     for (let i = this.sprayParticles.length - 1; i >= 0; i--) {
       const p = this.sprayParticles[i]
       p.x += p.vx
       p.y += p.vy
-      p.vy += 0.12 // gravedad
+      p.vy += 0.12
       p.life -= 1 / p.maxLife
-      if (p.life <= 0) {
-        this.sprayParticles.splice(i, 1)
-        continue
-      }
-      ctx.globalAlpha = p.life * 0.8
-      ctx.beginPath()
-      ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2)
-      ctx.fill()
+      if (p.life <= 0) { this.sprayParticles.splice(i, 1); continue }
+      bc.globalAlpha = p.life * 0.8
+      bc.beginPath()
+      bc.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2)
+      bc.fill()
     }
-    ctx.globalAlpha = 1.0
+    bc.globalAlpha = 1.0
 
-    // ── 6. RENDERIZADO DEL BARCO NÁUTICO INTERACTIVO ──────────────────────────
-    ctx.save()
-    ctx.translate(ax, ay)
-    ctx.rotate(angleRad)
+    bc.save()
+    bc.translate(ax, ay)
+    bc.rotate(angleRad)
 
     // Estela de agua detrás de la popa
-    ctx.strokeStyle = 'rgba(0, 245, 212, 0.45)'
-    ctx.lineWidth = 3
-    ctx.beginPath()
-    ctx.moveTo(-halfLen - 15, 3)
-    ctx.lineTo(-halfLen + 2, 2)
-    ctx.stroke()
+    bc.strokeStyle = 'rgba(0, 245, 212, 0.45)'
+    bc.lineWidth = 3
+    bc.beginPath()
+    bc.moveTo(-halfLen - 15, 3)
+    bc.lineTo(-halfLen + 2, 2)
+    bc.stroke()
 
-    // CASCO DEL BARCO (Línea náutica estilizada)
-    ctx.shadowColor = '#00f5d4'
-    ctx.shadowBlur  = 12
-    ctx.fillStyle   = '#0a2135' // Azul marino profundo
-    ctx.strokeStyle = '#00f5d4' // Borde turquesa luminiscente
-    ctx.lineWidth   = 1.8
-    ctx.beginPath()
-    ctx.moveTo(halfLen, -1)                      // Proa (puntiaguda arriba)
-    ctx.lineTo(halfLen - 6, 8)                   // Descenso de proa
-    ctx.lineTo(-halfLen + 5, 8)                  // Fondo del casco
-    ctx.lineTo(-halfLen, 0)                      // Espejo de popa
-    ctx.quadraticCurveTo(0, -3, halfLen, -1)     // Cubierta
-    ctx.closePath()
-    ctx.fill()
-    ctx.stroke()
-    ctx.shadowBlur = 0
+    // Casco
+    bc.fillStyle   = '#0a2135'
+    bc.strokeStyle = '#00f5d4'
+    bc.lineWidth   = 1.8
+    bc.beginPath()
+    bc.moveTo(halfLen, -1)
+    bc.lineTo(halfLen - 6, 8)
+    bc.lineTo(-halfLen + 5, 8)
+    bc.lineTo(-halfLen, 0)
+    bc.quadraticCurveTo(0, -3, halfLen, -1)
+    bc.closePath()
+    bc.fill()
+    bc.stroke()
 
-    // Franja decorativa ámbar de flotación
-    ctx.fillStyle = '#ff9f1c'
-    ctx.beginPath()
-    ctx.moveTo(halfLen - 4, 3)
-    ctx.lineTo(-halfLen + 2, 3)
-    ctx.lineTo(-halfLen + 3, 5)
-    ctx.lineTo(halfLen - 5, 5)
-    ctx.closePath()
-    ctx.fill()
+    // Franja ámbar
+    bc.fillStyle = '#ff9f1c'
+    bc.beginPath()
+    bc.moveTo(halfLen - 4, 3)
+    bc.lineTo(-halfLen + 2, 3)
+    bc.lineTo(-halfLen + 3, 5)
+    bc.lineTo(halfLen - 5, 5)
+    bc.closePath()
+    bc.fill()
 
-    // MÁSTIL DEL BARCO
-    ctx.strokeStyle = '#ffffff'
-    ctx.lineWidth = 2
-    ctx.beginPath()
-    ctx.moveTo(2, -2)
-    ctx.lineTo(2, -32) // Mástil de 30px de alto
-    ctx.stroke()
+    // Mástil
+    bc.strokeStyle = '#ffffff'
+    bc.lineWidth = 2
+    bc.beginPath()
+    bc.moveTo(2, -2)
+    bc.lineTo(2, -32)
+    bc.stroke()
 
-    // VELA TRIANGULAR LUMINISCENTE (Ondea suavemente con el viento)
+    // Vela
     const sailFlutter = Math.sin(t * 0.008 + wind * 0.2) * 2.5
-    ctx.fillStyle = 'rgba(240, 253, 250, 0.78)'
-    ctx.strokeStyle = '#00f5d4'
-    ctx.lineWidth = 1.2
-    ctx.beginPath()
-    ctx.moveTo(2, -30)                                    // Tope del mástil
-    ctx.quadraticCurveTo(14 + sailFlutter, -16, 20, -6)  // Escota de la vela
-    ctx.lineTo(2, -6)                                     // Base de la botavara
-    ctx.closePath()
-    ctx.fill()
-    ctx.stroke()
+    bc.fillStyle = 'rgba(240, 253, 250, 0.78)'
+    bc.strokeStyle = '#00f5d4'
+    bc.lineWidth = 1.2
+    bc.beginPath()
+    bc.moveTo(2, -30)
+    bc.quadraticCurveTo(14 + sailFlutter, -16, 20, -6)
+    bc.lineTo(2, -6)
+    bc.closePath()
+    bc.fill()
+    bc.stroke()
 
-    // Luz de navegación en la proa (luz verde/turquesa)
-    ctx.fillStyle = '#00f5d4'
-    ctx.beginPath()
-    ctx.arc(halfLen - 2, 0, 2.5, 0, Math.PI * 2)
-    ctx.fill()
+    // Luz de proa
+    bc.fillStyle = '#00f5d4'
+    bc.beginPath()
+    bc.arc(halfLen - 2, 0, 2.5, 0, Math.PI * 2)
+    bc.fill()
 
-    ctx.restore()
+    bc.restore()
 
-    // ── 7. Indicador Visual de Zona e Interacción ─────────────────────────────
-    const zoneLabels = {
-      lip:    '⚡ CRESTA · wavefolding & armónicos agudos',
-      barrel: '🌀 TUBO · resonancia hueca cavernosa',
-      face:   '🌊 PARED · forma de onda pura',
-      trough: '⚓ VALLE · sub-graves profundos',
-    }
-    ctx.font = '10px "Courier New", monospace'
-    ctx.fillStyle = 'rgba(0, 245, 212, 0.85)'
-    ctx.fillText(zoneLabels[surfZone], ax - 85, ay - 42)
-
-    // Línea guía vertical interactiva
-    ctx.strokeStyle = 'rgba(0, 245, 212, 0.12)'
-    ctx.lineWidth = 1
-    ctx.setLineDash([2, 5])
-    ctx.beginPath()
-    ctx.moveTo(ax, 0)
-    ctx.lineTo(ax, H)
-    ctx.stroke()
-    ctx.setLineDash([])
+    // Línea guía vertical
+    bc.strokeStyle = 'rgba(0, 245, 212, 0.12)'
+    bc.lineWidth = 1
+    bc.setLineDash([2, 5])
+    bc.beginPath()
+    bc.moveTo(ax, 0)
+    bc.lineTo(ax, H)
+    bc.stroke()
+    bc.setLineDash([])
 
     return { surfZone, slopeDeg }
   }
