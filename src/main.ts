@@ -478,7 +478,11 @@ function buildControls(): void {
     <span style="opacity:0.9">🎲 MAR ALEATORIO</span><br>
     &nbsp;&nbsp;carga datos oceánicos reales y<br>
     &nbsp;&nbsp;asigna todos los parámetros.<br><br>
-    <span style="opacity:0.35;font-size:10px">Open-Meteo Marine API · TypeScript · Web Audio API</span>
+    <span style="opacity:0.35;font-size:10px">Open-Meteo Marine API · TypeScript · Web Audio API</span><br>
+    <a href="https://github.com/vlasvlasvlas/wavesynth" target="_blank"
+       style="opacity:0.4;font-size:10px;color:#00f5d4;text-decoration:none;">
+      github.com/vlasvlasvlas/wavesynth
+    </a>
   `
   modal.appendChild(modalBox)
   modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none' })
