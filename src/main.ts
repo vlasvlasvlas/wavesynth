@@ -471,7 +471,7 @@ function buildControls(): void {
     <strong style="font-size:14px;letter-spacing:2px">WAVESYNTH</strong><br>
     <span style="opacity:0.4">──────────────────────────</span><br>
     La superficie del mar <em>es</em> la forma de onda.<br>
-    El barco surfea la síntesis en tiempo real.<br><br>
+    El barco navega sobre la síntesis en tiempo real.<br><br>
     <span style="opacity:0.7">↑ ↓</span> &nbsp;&nbsp;frecuencia (pitch)<br>
     <span style="opacity:0.7">← →</span> &nbsp;&nbsp;velocidad del LFO (filtro)<br>
     <span style="opacity:0.7">drag</span> &nbsp;posición y tono con el mouse<br><br>

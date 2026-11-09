@@ -1,6 +1,6 @@
 # WaveSynth 🌊
 
-> La superficie del mar **es** la forma de onda. El barco surfea la síntesis en tiempo real.
+> La superficie del mar **es** la forma de onda. El barco navega sobre la síntesis en tiempo real.
 
 Sintetizador web interactivo donde la oceanografía real (altura de olas, período, viento, temperatura) define el timbre. TypeScript + Vite + Web Audio API + AudioWorklet.
 
